@@ -41,7 +41,7 @@ export class SubstrateApp {
       throw new Error('Transport has not been defined')
     }
     this.transport = transport
-    this.cla = 429607051234
+    this.cla = cla
     this.slip0044 = slip0044
   }
 

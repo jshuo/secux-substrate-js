@@ -44,7 +44,7 @@ var SubstrateApp = /** @class */ (function () {
             throw new Error('Transport has not been defined');
         }
         this.transport = transport;
-        this.cla = 429607051234;
+        this.cla = cla;
         this.slip0044 = slip0044;
     }
     SubstrateApp.serializePath = function (slip0044, account, change, addressIndex) {
