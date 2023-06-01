@@ -14,7 +14,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  ******************************************************************************* */
-import Transport from '@ledgerhq/hw-transport'
+import { ITransport } from '@secux/transport';
 import {
   CHUNK_SIZE,
   errorCodeToString,
@@ -32,11 +32,11 @@ import {
 } from './common'
 
 export class SubstrateApp {
-  transport: Transport
+  transport: ITransport
   cla: number
   slip0044: number
 
-  constructor(transport: any, cla: number, slip0044: number) {
+  constructor(transport: ITransport, cla: number, slip0044: number) {
     if (!transport) {
       throw new Error('Transport has not been defined')
     }
@@ -90,55 +90,7 @@ export class SubstrateApp {
     }
   }
 
-  async appInfo() {
-    return this.transport.send(0xb0, 0x01, 0, 0).then(response => {
-      const errorCodeData = response.slice(-2)
-      const returnCode = errorCodeData[0] * 256 + errorCodeData[1]
-
-      let appName = ''
-      let appVersion = ''
-      let flagLen = 0
-      let flagsValue = 0
-
-      if (response[0] !== 1) {
-        // Ledger responds with format ID 1. There is no spec for any format != 1
-        return {
-          return_code: 0x9001,
-          error_message: 'response format ID not recognized',
-        }
-      } else {
-        const appNameLen = response[1]
-        appName = response.slice(2, 2 + appNameLen).toString('ascii')
-        let idx = 2 + appNameLen
-        const appVersionLen = response[idx]
-        idx += 1
-        appVersion = response.slice(idx, idx + appVersionLen).toString('ascii')
-        idx += appVersionLen
-        const appFlagsLen = response[idx]
-        idx += 1
-        flagLen = appFlagsLen
-        flagsValue = response[idx]
-      }
-
-      return {
-        return_code: returnCode,
-        error_message: errorCodeToString(returnCode),
-        // //
-        appName: appName ? appName : 'err',
-        appVersion: appVersion ? appVersion : 'err',
-        flagLen,
-        flagsValue,
-        // eslint-disable-next-line no-bitwise
-        flag_recovery: (flagsValue & 1) !== 0,
-        // eslint-disable-next-line no-bitwise
-        flag_signed_mcu_code: (flagsValue & 2) !== 0,
-        // eslint-disable-next-line no-bitwise
-        flag_onboarded: (flagsValue & 4) !== 0,
-        // eslint-disable-next-line no-bitwise
-        flag_pin_validated: (flagsValue & 128) !== 0,
-      }
-    }, processErrorResponse)
-  }
+  async appInfo() {  }
 
   async getAddress(
     account: number,
@@ -146,7 +98,7 @@ export class SubstrateApp {
     addressIndex: number,
     requireConfirmation = false,
     scheme = SCHEME.ED25519,
-  ): Promise<ResponseAddress> {
+  ){
     const bip44Path = SubstrateApp.serializePath(this.slip0044, account, change, addressIndex)
 
     let p1 = 0
@@ -154,179 +106,13 @@ export class SubstrateApp {
 
     let p2 = 0
     if (!isNaN(scheme)) p2 = scheme
-
-    return this.transport.send(this.cla, INS.GET_ADDR, p1, p2, bip44Path).then(response => {
-      const errorCodeData = response.slice(-2)
-      const errorCode = errorCodeData[0] * 256 + errorCodeData[1]
-
-      return {
-        pubKey: response.slice(0, 32).toString('hex'),
-        address: response.slice(32, response.length - 2).toString('ascii'),
-        return_code: errorCode,
-        error_message: errorCodeToString(errorCode),
-      }
-    }, processErrorResponse)
+    const txBuffer: Buffer = Buffer.allocUnsafe(10)
+    const rsp = await this.transport.Send(0x70, 0xa7, 0, 0, Buffer.concat([txBuffer]))
   }
 
-  async signSendChunk(chunkIdx: number, chunkNum: number, chunk: any, scheme = SCHEME.ED25519) {
-    let payloadType = PAYLOAD_TYPE.ADD
-    if (chunkIdx === 1) {
-      payloadType = PAYLOAD_TYPE.INIT
-    }
-    if (chunkIdx === chunkNum) {
-      payloadType = PAYLOAD_TYPE.LAST
-    }
-
-    let p2 = 0
-    if (!isNaN(scheme)) p2 = scheme
-
-    return this.transport.send(this.cla, INS.SIGN, payloadType, p2, chunk, [ERROR_CODE.NoError, 0x6984, 0x6a80]).then(response => {
-      const errorCodeData = response.slice(-2)
-      const returnCode = errorCodeData[0] * 256 + errorCodeData[1]
-      let errorMessage = errorCodeToString(returnCode)
-      let signature = null
-
-      if (returnCode === 0x6a80 || returnCode === 0x6984) {
-        errorMessage = response.slice(0, response.length - 2).toString('ascii')
-      } else if (response.length > 2) {
-        signature = response.slice(0, response.length - 2)
-      }
-
-      return {
-        signature,
-        return_code: returnCode,
-        error_message: errorMessage,
-      }
-    }, processErrorResponse)
+  async sign(account: number, change: number, addressIndex: number, message: Buffer, scheme = SCHEME.ED25519) {
+    const txBuffer: Buffer = Buffer.allocUnsafe(10)
+    const rsp = await this.transport.Send(0x70, 0xa7, 0, 0, Buffer.concat([txBuffer]))
   }
 
-  async sign(account: number, change: number, addressIndex: number, message: Buffer, scheme = SCHEME.ED25519): Promise<ResponseSign> {
-    const chunks = SubstrateApp.signGetChunks(this.slip0044, account, change, addressIndex, message)
-    return this.signSendChunk(1, chunks.length, chunks[0], scheme).then(async () => {
-      let result
-      for (let i = 1; i < chunks.length; i += 1) {
-        result = await this.signSendChunk(1 + i, chunks.length, chunks[i], scheme)
-        if (result.return_code !== ERROR_CODE.NoError) {
-          break
-        }
-      }
-
-      return {
-        return_code: result.return_code,
-        error_message: result.error_message,
-        signature: result.signature,
-      }
-    }, processErrorResponse)
-  }
-
-  /// Allow list related commands. They are NOT available on all apps
-
-  async getAllowlistPubKey(): Promise<ResponseAllowlistPubKey> {
-    return this.transport.send(this.cla, INS.ALLOWLIST_GET_PUBKEY, 0, 0).then(response => {
-      const errorCodeData = response.slice(-2)
-      const returnCode = errorCodeData[0] * 256 + errorCodeData[1]
-
-      console.log(response)
-
-      const pubkey = response.slice(0, 32)
-      // 32 bytes + 2 error code
-      if (response.length !== 34) {
-        return {
-          return_code: 0x6984,
-          error_message: errorCodeToString(0x6984),
-        }
-      }
-
-      return {
-        return_code: returnCode,
-        error_message: errorCodeToString(returnCode),
-        pubkey,
-      }
-    }, processErrorResponse)
-  }
-
-  async setAllowlistPubKey(pk: Buffer) {
-    return this.transport.send(this.cla, INS.ALLOWLIST_SET_PUBKEY, 0, 0, pk).then(response => {
-      const errorCodeData = response.slice(-2)
-      const returnCode = errorCodeData[0] * 256 + errorCodeData[1]
-
-      return {
-        return_code: returnCode,
-        error_message: errorCodeToString(returnCode),
-      }
-    }, processErrorResponse)
-  }
-
-  async getAllowlistHash(): Promise<ResponseAllowlistHash> {
-    return this.transport.send(this.cla, INS.ALLOWLIST_GET_HASH, 0, 0).then(response => {
-      const errorCodeData = response.slice(-2)
-      const returnCode = errorCodeData[0] * 256 + errorCodeData[1]
-
-      console.log(response)
-
-      const hash = response.slice(0, 32)
-      // 32 bytes + 2 error code
-      if (response.length !== 34) {
-        return {
-          return_code: 0x6984,
-          error_message: errorCodeToString(0x6984),
-        }
-      }
-
-      return {
-        return_code: returnCode,
-        error_message: errorCodeToString(returnCode),
-        hash,
-      }
-    }, processErrorResponse)
-  }
-
-  async uploadSendChunk(chunkIdx: number, chunkNum: number, chunk: any) {
-    let payloadType = PAYLOAD_TYPE.ADD
-    if (chunkIdx === 1) {
-      payloadType = PAYLOAD_TYPE.INIT
-    }
-    if (chunkIdx === chunkNum) {
-      payloadType = PAYLOAD_TYPE.LAST
-    }
-
-    return this.transport.send(this.cla, INS.ALLOWLIST_UPLOAD, payloadType, 0, chunk, [ERROR_CODE.NoError]).then(response => {
-      const errorCodeData = response.slice(-2)
-      const returnCode = errorCodeData[0] * 256 + errorCodeData[1]
-      const errorMessage = errorCodeToString(returnCode)
-
-      return {
-        return_code: returnCode,
-        error_message: errorMessage,
-      }
-    }, processErrorResponse)
-  }
-
-  async uploadAllowlist(message: any) {
-    const chunks: any[] = []
-    chunks.push(Buffer.from([0]))
-    chunks.push(...SubstrateApp.GetChunks(message))
-
-    return this.uploadSendChunk(1, chunks.length, chunks[0]).then(async result => {
-      if (result.return_code !== ERROR_CODE.NoError) {
-        return {
-          return_code: result.return_code,
-          error_message: result.error_message,
-        }
-      }
-
-      for (let i = 1; i < chunks.length; i += 1) {
-        // eslint-disable-next-line no-await-in-loop,no-param-reassign
-        result = await this.uploadSendChunk(1 + i, chunks.length, chunks[i])
-        if (result.return_code !== ERROR_CODE.NoError) {
-          break
-        }
-      }
-
-      return {
-        return_code: result.return_code,
-        error_message: result.error_message,
-      }
-    }, processErrorResponse)
-  }
 }

@@ -99,281 +99,47 @@ var SubstrateApp = /** @class */ (function () {
         });
     };
     SubstrateApp.prototype.appInfo = function () {
-        return __awaiter(this, void 0, void 0, function () {
-            return __generator(this, function (_a) {
-                return [2 /*return*/, this.transport.send(0xb0, 0x01, 0, 0).then(function (response) {
-                        var errorCodeData = response.slice(-2);
-                        var returnCode = errorCodeData[0] * 256 + errorCodeData[1];
-                        var appName = '';
-                        var appVersion = '';
-                        var flagLen = 0;
-                        var flagsValue = 0;
-                        if (response[0] !== 1) {
-                            // Ledger responds with format ID 1. There is no spec for any format != 1
-                            return {
-                                return_code: 0x9001,
-                                error_message: 'response format ID not recognized',
-                            };
-                        }
-                        else {
-                            var appNameLen = response[1];
-                            appName = response.slice(2, 2 + appNameLen).toString('ascii');
-                            var idx = 2 + appNameLen;
-                            var appVersionLen = response[idx];
-                            idx += 1;
-                            appVersion = response.slice(idx, idx + appVersionLen).toString('ascii');
-                            idx += appVersionLen;
-                            var appFlagsLen = response[idx];
-                            idx += 1;
-                            flagLen = appFlagsLen;
-                            flagsValue = response[idx];
-                        }
-                        return {
-                            return_code: returnCode,
-                            error_message: (0, common_1.errorCodeToString)(returnCode),
-                            // //
-                            appName: appName ? appName : 'err',
-                            appVersion: appVersion ? appVersion : 'err',
-                            flagLen: flagLen,
-                            flagsValue: flagsValue,
-                            // eslint-disable-next-line no-bitwise
-                            flag_recovery: (flagsValue & 1) !== 0,
-                            // eslint-disable-next-line no-bitwise
-                            flag_signed_mcu_code: (flagsValue & 2) !== 0,
-                            // eslint-disable-next-line no-bitwise
-                            flag_onboarded: (flagsValue & 4) !== 0,
-                            // eslint-disable-next-line no-bitwise
-                            flag_pin_validated: (flagsValue & 128) !== 0,
-                        };
-                    }, common_1.processErrorResponse)];
-            });
-        });
+        return __awaiter(this, void 0, void 0, function () { return __generator(this, function (_a) {
+            return [2 /*return*/];
+        }); });
     };
     SubstrateApp.prototype.getAddress = function (account, change, addressIndex, requireConfirmation, scheme) {
         if (requireConfirmation === void 0) { requireConfirmation = false; }
         if (scheme === void 0) { scheme = common_1.SCHEME.ED25519; }
         return __awaiter(this, void 0, void 0, function () {
-            var bip44Path, p1, p2;
+            var bip44Path, p1, p2, txBuffer, rsp;
             return __generator(this, function (_a) {
-                bip44Path = SubstrateApp.serializePath(this.slip0044, account, change, addressIndex);
-                p1 = 0;
-                if (requireConfirmation)
-                    p1 = 1;
-                p2 = 0;
-                if (!isNaN(scheme))
-                    p2 = scheme;
-                return [2 /*return*/, this.transport.send(this.cla, common_1.INS.GET_ADDR, p1, p2, bip44Path).then(function (response) {
-                        var errorCodeData = response.slice(-2);
-                        var errorCode = errorCodeData[0] * 256 + errorCodeData[1];
-                        return {
-                            pubKey: response.slice(0, 32).toString('hex'),
-                            address: response.slice(32, response.length - 2).toString('ascii'),
-                            return_code: errorCode,
-                            error_message: (0, common_1.errorCodeToString)(errorCode),
-                        };
-                    }, common_1.processErrorResponse)];
-            });
-        });
-    };
-    SubstrateApp.prototype.signSendChunk = function (chunkIdx, chunkNum, chunk, scheme) {
-        if (scheme === void 0) { scheme = common_1.SCHEME.ED25519; }
-        return __awaiter(this, void 0, void 0, function () {
-            var payloadType, p2;
-            return __generator(this, function (_a) {
-                payloadType = common_1.PAYLOAD_TYPE.ADD;
-                if (chunkIdx === 1) {
-                    payloadType = common_1.PAYLOAD_TYPE.INIT;
+                switch (_a.label) {
+                    case 0:
+                        bip44Path = SubstrateApp.serializePath(this.slip0044, account, change, addressIndex);
+                        p1 = 0;
+                        if (requireConfirmation)
+                            p1 = 1;
+                        p2 = 0;
+                        if (!isNaN(scheme))
+                            p2 = scheme;
+                        txBuffer = Buffer.allocUnsafe(10);
+                        return [4 /*yield*/, this.transport.Send(0x70, 0xa7, 0, 0, Buffer.concat([txBuffer]))];
+                    case 1:
+                        rsp = _a.sent();
+                        return [2 /*return*/];
                 }
-                if (chunkIdx === chunkNum) {
-                    payloadType = common_1.PAYLOAD_TYPE.LAST;
-                }
-                p2 = 0;
-                if (!isNaN(scheme))
-                    p2 = scheme;
-                return [2 /*return*/, this.transport.send(this.cla, common_1.INS.SIGN, payloadType, p2, chunk, [common_1.ERROR_CODE.NoError, 0x6984, 0x6a80]).then(function (response) {
-                        var errorCodeData = response.slice(-2);
-                        var returnCode = errorCodeData[0] * 256 + errorCodeData[1];
-                        var errorMessage = (0, common_1.errorCodeToString)(returnCode);
-                        var signature = null;
-                        if (returnCode === 0x6a80 || returnCode === 0x6984) {
-                            errorMessage = response.slice(0, response.length - 2).toString('ascii');
-                        }
-                        else if (response.length > 2) {
-                            signature = response.slice(0, response.length - 2);
-                        }
-                        return {
-                            signature: signature,
-                            return_code: returnCode,
-                            error_message: errorMessage,
-                        };
-                    }, common_1.processErrorResponse)];
             });
         });
     };
     SubstrateApp.prototype.sign = function (account, change, addressIndex, message, scheme) {
         if (scheme === void 0) { scheme = common_1.SCHEME.ED25519; }
         return __awaiter(this, void 0, void 0, function () {
-            var chunks;
-            var _this = this;
+            var txBuffer, rsp;
             return __generator(this, function (_a) {
-                chunks = SubstrateApp.signGetChunks(this.slip0044, account, change, addressIndex, message);
-                return [2 /*return*/, this.signSendChunk(1, chunks.length, chunks[0], scheme).then(function () { return __awaiter(_this, void 0, void 0, function () {
-                        var result, i;
-                        return __generator(this, function (_a) {
-                            switch (_a.label) {
-                                case 0:
-                                    i = 1;
-                                    _a.label = 1;
-                                case 1:
-                                    if (!(i < chunks.length)) return [3 /*break*/, 4];
-                                    return [4 /*yield*/, this.signSendChunk(1 + i, chunks.length, chunks[i], scheme)];
-                                case 2:
-                                    result = _a.sent();
-                                    if (result.return_code !== common_1.ERROR_CODE.NoError) {
-                                        return [3 /*break*/, 4];
-                                    }
-                                    _a.label = 3;
-                                case 3:
-                                    i += 1;
-                                    return [3 /*break*/, 1];
-                                case 4: return [2 /*return*/, {
-                                        return_code: result.return_code,
-                                        error_message: result.error_message,
-                                        signature: result.signature,
-                                    }];
-                            }
-                        });
-                    }); }, common_1.processErrorResponse)];
-            });
-        });
-    };
-    /// Allow list related commands. They are NOT available on all apps
-    SubstrateApp.prototype.getAllowlistPubKey = function () {
-        return __awaiter(this, void 0, void 0, function () {
-            return __generator(this, function (_a) {
-                return [2 /*return*/, this.transport.send(this.cla, common_1.INS.ALLOWLIST_GET_PUBKEY, 0, 0).then(function (response) {
-                        var errorCodeData = response.slice(-2);
-                        var returnCode = errorCodeData[0] * 256 + errorCodeData[1];
-                        console.log(response);
-                        var pubkey = response.slice(0, 32);
-                        // 32 bytes + 2 error code
-                        if (response.length !== 34) {
-                            return {
-                                return_code: 0x6984,
-                                error_message: (0, common_1.errorCodeToString)(0x6984),
-                            };
-                        }
-                        return {
-                            return_code: returnCode,
-                            error_message: (0, common_1.errorCodeToString)(returnCode),
-                            pubkey: pubkey,
-                        };
-                    }, common_1.processErrorResponse)];
-            });
-        });
-    };
-    SubstrateApp.prototype.setAllowlistPubKey = function (pk) {
-        return __awaiter(this, void 0, void 0, function () {
-            return __generator(this, function (_a) {
-                return [2 /*return*/, this.transport.send(this.cla, common_1.INS.ALLOWLIST_SET_PUBKEY, 0, 0, pk).then(function (response) {
-                        var errorCodeData = response.slice(-2);
-                        var returnCode = errorCodeData[0] * 256 + errorCodeData[1];
-                        return {
-                            return_code: returnCode,
-                            error_message: (0, common_1.errorCodeToString)(returnCode),
-                        };
-                    }, common_1.processErrorResponse)];
-            });
-        });
-    };
-    SubstrateApp.prototype.getAllowlistHash = function () {
-        return __awaiter(this, void 0, void 0, function () {
-            return __generator(this, function (_a) {
-                return [2 /*return*/, this.transport.send(this.cla, common_1.INS.ALLOWLIST_GET_HASH, 0, 0).then(function (response) {
-                        var errorCodeData = response.slice(-2);
-                        var returnCode = errorCodeData[0] * 256 + errorCodeData[1];
-                        console.log(response);
-                        var hash = response.slice(0, 32);
-                        // 32 bytes + 2 error code
-                        if (response.length !== 34) {
-                            return {
-                                return_code: 0x6984,
-                                error_message: (0, common_1.errorCodeToString)(0x6984),
-                            };
-                        }
-                        return {
-                            return_code: returnCode,
-                            error_message: (0, common_1.errorCodeToString)(returnCode),
-                            hash: hash,
-                        };
-                    }, common_1.processErrorResponse)];
-            });
-        });
-    };
-    SubstrateApp.prototype.uploadSendChunk = function (chunkIdx, chunkNum, chunk) {
-        return __awaiter(this, void 0, void 0, function () {
-            var payloadType;
-            return __generator(this, function (_a) {
-                payloadType = common_1.PAYLOAD_TYPE.ADD;
-                if (chunkIdx === 1) {
-                    payloadType = common_1.PAYLOAD_TYPE.INIT;
+                switch (_a.label) {
+                    case 0:
+                        txBuffer = Buffer.allocUnsafe(10);
+                        return [4 /*yield*/, this.transport.Send(0x70, 0xa7, 0, 0, Buffer.concat([txBuffer]))];
+                    case 1:
+                        rsp = _a.sent();
+                        return [2 /*return*/];
                 }
-                if (chunkIdx === chunkNum) {
-                    payloadType = common_1.PAYLOAD_TYPE.LAST;
-                }
-                return [2 /*return*/, this.transport.send(this.cla, common_1.INS.ALLOWLIST_UPLOAD, payloadType, 0, chunk, [common_1.ERROR_CODE.NoError]).then(function (response) {
-                        var errorCodeData = response.slice(-2);
-                        var returnCode = errorCodeData[0] * 256 + errorCodeData[1];
-                        var errorMessage = (0, common_1.errorCodeToString)(returnCode);
-                        return {
-                            return_code: returnCode,
-                            error_message: errorMessage,
-                        };
-                    }, common_1.processErrorResponse)];
-            });
-        });
-    };
-    SubstrateApp.prototype.uploadAllowlist = function (message) {
-        return __awaiter(this, void 0, void 0, function () {
-            var chunks;
-            var _this = this;
-            return __generator(this, function (_a) {
-                chunks = [];
-                chunks.push(Buffer.from([0]));
-                chunks.push.apply(chunks, SubstrateApp.GetChunks(message));
-                return [2 /*return*/, this.uploadSendChunk(1, chunks.length, chunks[0]).then(function (result) { return __awaiter(_this, void 0, void 0, function () {
-                        var i;
-                        return __generator(this, function (_a) {
-                            switch (_a.label) {
-                                case 0:
-                                    if (result.return_code !== common_1.ERROR_CODE.NoError) {
-                                        return [2 /*return*/, {
-                                                return_code: result.return_code,
-                                                error_message: result.error_message,
-                                            }];
-                                    }
-                                    i = 1;
-                                    _a.label = 1;
-                                case 1:
-                                    if (!(i < chunks.length)) return [3 /*break*/, 4];
-                                    return [4 /*yield*/, this.uploadSendChunk(1 + i, chunks.length, chunks[i])];
-                                case 2:
-                                    // eslint-disable-next-line no-await-in-loop,no-param-reassign
-                                    result = _a.sent();
-                                    if (result.return_code !== common_1.ERROR_CODE.NoError) {
-                                        return [3 /*break*/, 4];
-                                    }
-                                    _a.label = 3;
-                                case 3:
-                                    i += 1;
-                                    return [3 /*break*/, 1];
-                                case 4: return [2 /*return*/, {
-                                        return_code: result.return_code,
-                                        error_message: result.error_message,
-                                    }];
-                            }
-                        });
-                    }); }, common_1.processErrorResponse)];
             });
         });
     };
