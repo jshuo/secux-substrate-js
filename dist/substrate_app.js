@@ -133,7 +133,7 @@ var SubstrateApp = /** @class */ (function () {
         if (requireConfirmation === void 0) { requireConfirmation = false; }
         if (scheme === void 0) { scheme = common_1.SCHEME.ED25519; }
         return __awaiter(this, void 0, void 0, function () {
-            var bip44Path, rsp;
+            var bip44Path, rsp, address, pubKey;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
@@ -141,7 +141,8 @@ var SubstrateApp = /** @class */ (function () {
                         return [4 /*yield*/, this.transport.Send(0x70, 0xa7, 0, 0, Buffer.concat([bip44Path]))];
                     case 1:
                         rsp = _a.sent();
-                        return [2 /*return*/];
+                        address = null, pubKey = null;
+                        return [2 /*return*/, { address: address, pubKey: pubKey }];
                 }
             });
         });
@@ -149,7 +150,7 @@ var SubstrateApp = /** @class */ (function () {
     SubstrateApp.prototype.sign = function (account, change, addressIndex, message, scheme) {
         if (scheme === void 0) { scheme = common_1.SCHEME.ED25519; }
         return __awaiter(this, void 0, void 0, function () {
-            var bip44Path, rsp;
+            var bip44Path, rsp, signature;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
@@ -157,7 +158,8 @@ var SubstrateApp = /** @class */ (function () {
                         return [4 /*yield*/, this.transport.Send(0x70, 0xa7, 0, 0, Buffer.concat([bip44Path]))];
                     case 1:
                         rsp = _a.sent();
-                        return [2 /*return*/];
+                        signature = null;
+                        return [2 /*return*/, { signature: signature }];
                 }
             });
         });

@@ -9,6 +9,11 @@ export declare class SubstrateApp {
     static serializePath(slip0044: number, account: number, change: number, addressIndex: number): Buffer;
     getVersion(): Promise<ResponseVersion>;
     appInfo(): Promise<void>;
-    getAddress(account: number, change: number, addressIndex: number, requireConfirmation?: boolean, scheme?: number): Promise<void>;
-    sign(account: number, change: number, addressIndex: number, message: Buffer, scheme?: number): Promise<void>;
+    getAddress(account: number, change: number, addressIndex: number, requireConfirmation?: boolean, scheme?: number): Promise<{
+        address: null;
+        pubKey: null;
+    }>;
+    sign(account: number, change: number, addressIndex: number, message: Buffer, scheme?: number): Promise<{
+        signature: null;
+    }>;
 }
