@@ -10,10 +10,10 @@ export declare class SubstrateApp {
     getVersion(): Promise<ResponseVersion>;
     appInfo(): Promise<void>;
     getAddress(account: number, change: number, addressIndex: number, requireConfirmation?: boolean, scheme?: number): Promise<{
-        address: null;
-        pubKey: null;
+        address: string;
+        pubKey: string;
     }>;
     sign(account: number, change: number, addressIndex: number, message: Buffer, scheme?: number): Promise<{
-        signature: null;
+        signature: string;
     }>;
 }

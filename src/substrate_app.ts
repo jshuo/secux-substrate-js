@@ -95,14 +95,14 @@ export class SubstrateApp {
   ){
     const bip44Path = SubstrateApp.serializePath(this.slip0044, account, change, addressIndex)
     const rsp = await this.transport.Send(0x70, 0xa7, 0, 0, Buffer.concat([bip44Path]))
-    const address = null, pubKey  = null
+    const address = 'null', pubKey  = 'null'
     return { address, pubKey }
   }
 
   async sign(account: number, change: number, addressIndex: number, message: Buffer, scheme = SCHEME.ED25519) {
     const bip44Path = SubstrateApp.serializePath(this.slip0044, account, change, addressIndex)
     const rsp = await this.transport.Send(0x70, 0xa7, 0, 0, Buffer.concat([bip44Path]))
-    const signature = null
+    const signature = 'null'
     return {signature}
   }
 

@@ -141,7 +141,7 @@ var SubstrateApp = /** @class */ (function () {
                         return [4 /*yield*/, this.transport.Send(0x70, 0xa7, 0, 0, Buffer.concat([bip44Path]))];
                     case 1:
                         rsp = _a.sent();
-                        address = null, pubKey = null;
+                        address = 'null', pubKey = 'null';
                         return [2 /*return*/, { address: address, pubKey: pubKey }];
                 }
             });
@@ -158,7 +158,7 @@ var SubstrateApp = /** @class */ (function () {
                         return [4 /*yield*/, this.transport.Send(0x70, 0xa7, 0, 0, Buffer.concat([bip44Path]))];
                     case 1:
                         rsp = _a.sent();
-                        signature = null;
+                        signature = 'null';
                         return [2 /*return*/, { signature: signature }];
                 }
             });
