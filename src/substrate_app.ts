@@ -14,22 +14,38 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  ******************************************************************************* */
+import { buildPathBuffer } from '@secux/utility'
 import { ITransport } from '@secux/transport';
 import {
   CHUNK_SIZE,
-  errorCodeToString,
-  ERROR_CODE,
   getVersion,
-  INS,
-  PAYLOAD_TYPE,
   processErrorResponse,
-  ResponseAddress,
-  ResponseAllowlistHash,
-  ResponseAllowlistPubKey,
-  ResponseSign,
   ResponseVersion,
   SCHEME,
 } from './common'
+
+
+function buildTxBuffer(paths: Array<string>, txs: Buffer) {
+  const head = [],
+    data = []
+  for (let i = 0; i < paths.length; i++) {
+    const headerBuffer = Buffer.alloc(4)
+    headerBuffer.writeUInt16LE(0, 0)
+    headerBuffer.writeUInt16LE(0, 2)
+
+    const path = paths[i]
+    const { pathNum, pathBuffer } = buildPathBuffer(path)
+    // generic prepare can use 3 or 5 path level key to sign
+    if (pathNum !== 5 && pathNum !== 3) throw Error('Invalid Path for Signing Transaction')
+
+    head.push(Buffer.concat([Buffer.from([pathNum * 4 + 4]), headerBuffer, pathBuffer]))
+  }
+  // fixed 2 byte length
+  const preparedTxLenBuf = Buffer.alloc(2)
+  preparedTxLenBuf.writeUInt16BE(txs.length, 0)
+  data.push(Buffer.concat([preparedTxLenBuf, txs]))
+  return Buffer.concat([Buffer.from([paths.length]), ...head, ...data])
+}
 
 export class SubstrateApp {
   transport: ITransport
@@ -59,28 +75,6 @@ export class SubstrateApp {
     return buf
   }
 
-  static GetChunks(message: Buffer) {
-    const chunks = []
-    const buffer = Buffer.from(message)
-
-    for (let i = 0; i < buffer.length; i += CHUNK_SIZE) {
-      let end = i + CHUNK_SIZE
-      if (i > buffer.length) {
-        end = buffer.length
-      }
-      chunks.push(buffer.slice(i, end))
-    }
-
-    return chunks
-  }
-
-  static signGetChunks(slip0044: number, account: number, change: number, addressIndex: number, message: Buffer) {
-    const chunks = []
-    const bip44Path = SubstrateApp.serializePath(slip0044, account, change, addressIndex)
-    chunks.push(bip44Path)
-    chunks.push(...SubstrateApp.GetChunks(message))
-    return chunks
-  }
 
   async getVersion(): Promise<ResponseVersion> {
     try {
@@ -100,19 +94,12 @@ export class SubstrateApp {
     scheme = SCHEME.ED25519,
   ){
     const bip44Path = SubstrateApp.serializePath(this.slip0044, account, change, addressIndex)
-
-    let p1 = 0
-    if (requireConfirmation) p1 = 1
-
-    let p2 = 0
-    if (!isNaN(scheme)) p2 = scheme
-    const txBuffer: Buffer = Buffer.allocUnsafe(10)
-    const rsp = await this.transport.Send(0x70, 0xa7, 0, 0, Buffer.concat([txBuffer]))
+    const rsp = await this.transport.Send(0x70, 0xa7, 0, 0, Buffer.concat([bip44Path]))
   }
 
   async sign(account: number, change: number, addressIndex: number, message: Buffer, scheme = SCHEME.ED25519) {
-    const txBuffer: Buffer = Buffer.allocUnsafe(10)
-    const rsp = await this.transport.Send(0x70, 0xa7, 0, 0, Buffer.concat([txBuffer]))
+    const bip44Path = SubstrateApp.serializePath(this.slip0044, account, change, addressIndex)
+    const rsp = await this.transport.Send(0x70, 0xa7, 0, 0, Buffer.concat([bip44Path]))
   }
 
 }

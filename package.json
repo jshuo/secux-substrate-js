@@ -44,6 +44,7 @@
     "@ledgerhq/hw-transport-webusb": "6.27.13",
     "@secux/transport-webusb": "^2.1.2",
     "@secux/transport": "^3.1.5",
+    "@secux/utility": "^3.0.4",
     "@ledgerhq/logs": "^6.10.0",
     "@swc/core": "^1.2.237",
     "@types/figlet": "^1.5.4",

@@ -1453,7 +1453,7 @@
     hash.js "^1.1.7"
     ow "^0.27.0"
 
-"@secux/utility@^3.0.14":
+"@secux/utility@^3.0.14", "@secux/utility@^3.0.4":
   version "3.0.14"
   resolved "https://registry.yarnpkg.com/@secux/utility/-/utility-3.0.14.tgz#32fdc8a8f9c94a5c238725d0b2c4c68180052fb2"
   integrity sha512-rKr1Y9fdWKAJKIqI11svcCzbEQ6kCD8KLQPLEqfd/G8xYuWKIcVlAuDfDc7eu54zPTlmasU/r7d5aJDA4iAiSg==
