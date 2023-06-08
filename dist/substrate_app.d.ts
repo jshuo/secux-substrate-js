@@ -7,13 +7,14 @@ export declare class SubstrateApp {
     slip0044: number;
     constructor(transport: ITransport, cla: number, slip0044: number);
     static serializePath(slip0044: number, account: number, change: number, addressIndex: number): Buffer;
+    static GetChunks(message: Buffer): Buffer[];
+    static signGetChunks(slip0044: number, account: number, change: number, addressIndex: number, message: Buffer): Buffer[];
     getVersion(): Promise<ResponseVersion>;
     appInfo(): Promise<void>;
+    signSendChunk(chunkIdx: number, chunkNum: number, chunk: any, scheme?: number): Promise<any>;
     getAddress(account: number, change: number, addressIndex: number, requireConfirmation?: boolean, scheme?: number): Promise<{
-        address: string;
         pubKey: string;
+        address: string;
     }>;
-    sign(account: number, change: number, addressIndex: number, message: Buffer, scheme?: number): Promise<{
-        signature: string;
-    }>;
+    sign(account: number, change: number, addressIndex: number, message: Buffer, scheme?: number): Promise<string>;
 }

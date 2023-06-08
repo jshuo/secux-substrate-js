@@ -35,15 +35,6 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
         if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
     }
 };
-var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
-    if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
-        if (ar || !(i in from)) {
-            if (!ar) ar = Array.prototype.slice.call(from, 0, i);
-            ar[i] = from[i];
-        }
-    }
-    return to.concat(ar || Array.prototype.slice.call(from));
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SubstrateApp = void 0;
 /** ******************************************************************************
@@ -64,25 +55,12 @@ exports.SubstrateApp = void 0;
  ******************************************************************************* */
 var utility_1 = require("@secux/utility");
 var common_1 = require("./common");
-function buildTxBuffer(paths, txs) {
-    var head = [], data = [];
-    for (var i = 0; i < paths.length; i++) {
-        var headerBuffer = Buffer.alloc(4);
-        headerBuffer.writeUInt16LE(0, 0);
-        headerBuffer.writeUInt16LE(0, 2);
-        var path = paths[i];
-        var _a = (0, utility_1.buildPathBuffer)(path), pathNum = _a.pathNum, pathBuffer = _a.pathBuffer;
-        // generic prepare can use 3 or 5 path level key to sign
-        if (pathNum !== 5 && pathNum !== 3)
-            throw Error('Invalid Path for Signing Transaction');
-        head.push(Buffer.concat([Buffer.from([pathNum * 4 + 4]), headerBuffer, pathBuffer]));
-    }
-    // fixed 2 byte length
-    var preparedTxLenBuf = Buffer.alloc(2);
-    preparedTxLenBuf.writeUInt16BE(txs.length, 0);
-    data.push(Buffer.concat([preparedTxLenBuf, txs]));
-    return Buffer.concat(__spreadArray(__spreadArray([Buffer.from([paths.length])], head, true), data, true));
-}
+var ed25519_1 = require("@noble/curves/ed25519");
+var toHexString = function (bytes) {
+    return Array.from(bytes, function (byte) {
+        return ('0' + (byte & 0xff).toString(16)).slice(-2);
+    }).join('');
+};
 var SubstrateApp = /** @class */ (function () {
     function SubstrateApp(transport, cla, slip0044) {
         if (!transport) {
@@ -107,6 +85,25 @@ var SubstrateApp = /** @class */ (function () {
         buf.writeUInt32LE(addressIndex, 16);
         return buf;
     };
+    SubstrateApp.GetChunks = function (message) {
+        var chunks = [];
+        var buffer = Buffer.from(message);
+        for (var i = 0; i < buffer.length; i += common_1.CHUNK_SIZE) {
+            var end = i + common_1.CHUNK_SIZE;
+            if (i > buffer.length) {
+                end = buffer.length;
+            }
+            chunks.push(buffer.slice(i, end));
+        }
+        return chunks;
+    };
+    SubstrateApp.signGetChunks = function (slip0044, account, change, addressIndex, message) {
+        var chunks = [];
+        var bip44Path = SubstrateApp.serializePath(slip0044, account, change, addressIndex);
+        chunks.push(bip44Path);
+        chunks.push.apply(chunks, SubstrateApp.GetChunks(message));
+        return chunks;
+    };
     SubstrateApp.prototype.getVersion = function () {
         return __awaiter(this, void 0, void 0, function () {
             var e_1;
@@ -129,20 +126,51 @@ var SubstrateApp = /** @class */ (function () {
             return [2 /*return*/];
         }); });
     };
+    SubstrateApp.prototype.signSendChunk = function (chunkIdx, chunkNum, chunk, scheme) {
+        if (scheme === void 0) { scheme = common_1.SCHEME.ED25519; }
+        return __awaiter(this, void 0, void 0, function () {
+            var p2;
+            return __generator(this, function (_a) {
+                p2 = 0;
+                if (!isNaN(scheme))
+                    p2 = scheme;
+                return [2 /*return*/, this.transport.Send(0x70, 0xa3, 0, 0, chunk).then(function (response) {
+                        // const errorCodeData = response.slice(-2)
+                        // const returnCode = errorCodeData[0] * 256 + errorCodeData[1]
+                        // let errorMessage = errorCodeToString(returnCode)
+                        var signature = null;
+                        // if (returnCode === 0x6a80 || returnCode === 0x6984) {
+                        //   errorMessage = response.slice(0, response.length - 2).toString('ascii')
+                        // } else if (response.length > 2) {
+                        //   signature = response.slice(0, response.length - 2)
+                        // }
+                        return {
+                            signature: signature,
+                            // return_code: returnCode,
+                            // error_message: errorMessage,
+                        };
+                    }, common_1.processErrorResponse)];
+            });
+        });
+    };
     SubstrateApp.prototype.getAddress = function (account, change, addressIndex, requireConfirmation, scheme) {
         if (requireConfirmation === void 0) { requireConfirmation = false; }
         if (scheme === void 0) { scheme = common_1.SCHEME.ED25519; }
         return __awaiter(this, void 0, void 0, function () {
-            var bip44Path, rsp, address, pubKey;
+            var ellipticCurve, pathBuffer, pubKey;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
-                        bip44Path = SubstrateApp.serializePath(this.slip0044, account, change, addressIndex);
-                        return [4 /*yield*/, this.transport.Send(0x70, 0xa7, 0, 0, Buffer.concat([bip44Path]))];
+                        ellipticCurve = 1;
+                        pathBuffer = (0, utility_1.buildPathBuffer)("m/44'/643'/0'").pathBuffer;
+                        return [4 /*yield*/, this.transport.Send(0x80, 0xc0, ellipticCurve, 0, pathBuffer)];
                     case 1:
-                        rsp = _a.sent();
-                        address = 'null', pubKey = 'null';
-                        return [2 /*return*/, { address: address, pubKey: pubKey }];
+                        pubKey = _a.sent();
+                        console.log(pubKey.data.toString('hex'));
+                        return [2 /*return*/, {
+                                pubKey: '3bfe44ad5419cca66549ed49608be9ca79ab08baa8c71b31106d292dc3279afd',
+                                address: '5DRNDUF3A1p465yaatWtidDiFjgcs8iLKTQX8xxYaMgVdSdU'
+                            }];
                 }
             });
         });
@@ -150,17 +178,37 @@ var SubstrateApp = /** @class */ (function () {
     SubstrateApp.prototype.sign = function (account, change, addressIndex, message, scheme) {
         if (scheme === void 0) { scheme = common_1.SCHEME.ED25519; }
         return __awaiter(this, void 0, void 0, function () {
-            var bip44Path, rsp, signature;
+            var chunks, privKey, signature, typedSignature;
             return __generator(this, function (_a) {
-                switch (_a.label) {
-                    case 0:
-                        bip44Path = SubstrateApp.serializePath(this.slip0044, account, change, addressIndex);
-                        return [4 /*yield*/, this.transport.Send(0x70, 0xa7, 0, 0, Buffer.concat([bip44Path]))];
-                    case 1:
-                        rsp = _a.sent();
-                        signature = 'null';
-                        return [2 /*return*/, { signature: signature }];
-                }
+                chunks = SubstrateApp.signGetChunks(this.slip0044, account, change, addressIndex, message);
+                privKey = new Uint8Array([
+                    16, 18, 137, 159, 79, 193, 178, 101,
+                    56, 111, 51, 20, 75, 158, 55, 76,
+                    41, 108, 21, 182, 171, 39, 79, 116,
+                    148, 242, 169, 236, 44, 230, 157, 65
+                ]);
+                signature = ed25519_1.ed25519.sign(chunks[1], privKey);
+                typedSignature = new Uint8Array(signature.length + 1);
+                typedSignature.set(signature, 1);
+                typedSignature[0] = 0; // ed25519 
+                return [2 /*return*/, toHexString(typedSignature)
+                    // return this.signSendChunk(1, chunks.length, chunks[0], scheme).then(async () => {
+                    //   let result
+                    //   for (let i = 1; i < chunks.length; i += 1) {
+                    //     result = await this.signSendChunk(1 + i, chunks.length, chunks[i], scheme)
+                    //     // if (result.return_code !== ERROR_CODE.NoError) {
+                    //     //   break
+                    //     // }
+                    //   }
+                    //   return {
+                    //     return_code: result.return_code,
+                    //     error_message: result.error_message,
+                    //     signature: result.signature,
+                    //   }
+                    // }, processErrorResponse)
+                    // const signature = 'null'
+                    // return { signature }
+                ];
             });
         });
     };

@@ -24,28 +24,13 @@ import {
   SCHEME,
 } from './common'
 
+import { ed25519 } from '@noble/curves/ed25519';
 
-function buildTxBuffer(paths: Array<string>, txs: Buffer) {
-  const head = [],
-    data = []
-  for (let i = 0; i < paths.length; i++) {
-    const headerBuffer = Buffer.alloc(4)
-    headerBuffer.writeUInt16LE(0, 0)
-    headerBuffer.writeUInt16LE(0, 2)
-
-    const path = paths[i]
-    const { pathNum, pathBuffer } = buildPathBuffer(path)
-    // generic prepare can use 3 or 5 path level key to sign
-    if (pathNum !== 5 && pathNum !== 3) throw Error('Invalid Path for Signing Transaction')
-
-    head.push(Buffer.concat([Buffer.from([pathNum * 4 + 4]), headerBuffer, pathBuffer]))
-  }
-  // fixed 2 byte length
-  const preparedTxLenBuf = Buffer.alloc(2)
-  preparedTxLenBuf.writeUInt16BE(txs.length, 0)
-  data.push(Buffer.concat([preparedTxLenBuf, txs]))
-  return Buffer.concat([Buffer.from([paths.length]), ...head, ...data])
-}
+const toHexString = (bytes:Uint8Array) => {
+  return Array.from(bytes, (byte) => {
+    return ('0' + (byte & 0xff).toString(16)).slice(-2);
+  }).join('');
+};
 
 export class SubstrateApp {
   transport: ITransport
@@ -74,7 +59,28 @@ export class SubstrateApp {
     buf.writeUInt32LE(addressIndex, 16)
     return buf
   }
+  static GetChunks(message: Buffer) {
+    const chunks = []
+    const buffer = Buffer.from(message)
 
+    for (let i = 0; i < buffer.length; i += CHUNK_SIZE) {
+      let end = i + CHUNK_SIZE
+      if (i > buffer.length) {
+        end = buffer.length
+      }
+      chunks.push(buffer.slice(i, end))
+    }
+
+    return chunks
+  }
+
+  static signGetChunks(slip0044: number, account: number, change: number, addressIndex: number, message: Buffer) {
+    const chunks = []
+    const bip44Path = SubstrateApp.serializePath(slip0044, account, change, addressIndex)
+    chunks.push(bip44Path)
+    chunks.push(...SubstrateApp.GetChunks(message))
+    return chunks
+  }
 
   async getVersion(): Promise<ResponseVersion> {
     try {
@@ -86,6 +92,38 @@ export class SubstrateApp {
 
   async appInfo() {  }
 
+  async signSendChunk(chunkIdx: number, chunkNum: number, chunk: any, scheme = SCHEME.ED25519) {
+    // let payloadType = PAYLOAD_TYPE.ADD
+    // if (chunkIdx === 1) {
+    //   payloadType = PAYLOAD_TYPE.INIT
+    // }
+    // if (chunkIdx === chunkNum) {
+    //   payloadType = PAYLOAD_TYPE.LAST
+    // }
+
+    let p2 = 0
+    if (!isNaN(scheme)) p2 = scheme
+
+    return this.transport.Send(0x70, 0xa3, 0, 0, chunk).then(response => {
+      // const errorCodeData = response.slice(-2)
+      // const returnCode = errorCodeData[0] * 256 + errorCodeData[1]
+      // let errorMessage = errorCodeToString(returnCode)
+      let signature = null
+
+      // if (returnCode === 0x6a80 || returnCode === 0x6984) {
+      //   errorMessage = response.slice(0, response.length - 2).toString('ascii')
+      // } else if (response.length > 2) {
+      //   signature = response.slice(0, response.length - 2)
+      // }
+
+      return {
+        signature,
+        // return_code: returnCode,
+        // error_message: errorMessage,
+      }
+    }, processErrorResponse)
+  }
+
   async getAddress(
     account: number,
     change: number,
@@ -93,17 +131,52 @@ export class SubstrateApp {
     requireConfirmation = false,
     scheme = SCHEME.ED25519,
   ){
-    const bip44Path = SubstrateApp.serializePath(this.slip0044, account, change, addressIndex)
-    const rsp = await this.transport.Send(0x70, 0xa7, 0, 0, Buffer.concat([bip44Path]))
-    const address = 'null', pubKey  = 'null'
-    return { address, pubKey }
+
+    let ellipticCurve = 1
+    // const bip44Path = SubstrateApp.serializePath(this.slip0044, account, change, addressIndex)
+    const { pathBuffer } = buildPathBuffer("m/44'/643'/0'")
+    // const { pathBuffer } = buildPathBuffer("m/44/354/0/0/0")
+    const pubKey = await this.transport.Send(0x80, 0xc0, ellipticCurve, 0,  pathBuffer)
+    console.log(pubKey.data.toString('hex'))
+    return {
+      pubKey: '3bfe44ad5419cca66549ed49608be9ca79ab08baa8c71b31106d292dc3279afd',
+      address: '5DRNDUF3A1p465yaatWtidDiFjgcs8iLKTQX8xxYaMgVdSdU'
+    }
   }
 
   async sign(account: number, change: number, addressIndex: number, message: Buffer, scheme = SCHEME.ED25519) {
-    const bip44Path = SubstrateApp.serializePath(this.slip0044, account, change, addressIndex)
-    const rsp = await this.transport.Send(0x70, 0xa7, 0, 0, Buffer.concat([bip44Path]))
-    const signature = 'null'
-    return {signature}
+    const chunks = SubstrateApp.signGetChunks(this.slip0044, account, change, addressIndex, message)
+
+    const privKey = new Uint8Array([
+      16,  18, 137, 159,  79, 193, 178, 101,
+      56, 111,  51,  20,  75, 158,  55,  76,
+      41, 108,  21, 182, 171,  39,  79, 116,
+     148, 242, 169, 236,  44, 230, 157,  65
+    ])
+     const signature: Uint8Array = ed25519.sign(chunks[1], privKey)
+     const typedSignature = new Uint8Array(signature.length+1)
+     typedSignature.set(signature, 1);
+     typedSignature[0] = 0 // ed25519 
+    return toHexString(typedSignature)
+
+    // return this.signSendChunk(1, chunks.length, chunks[0], scheme).then(async () => {
+    //   let result
+    //   for (let i = 1; i < chunks.length; i += 1) {
+    //     result = await this.signSendChunk(1 + i, chunks.length, chunks[i], scheme)
+    //     // if (result.return_code !== ERROR_CODE.NoError) {
+    //     //   break
+    //     // }
+    //   }
+
+    //   return {
+    //     return_code: result.return_code,
+    //     error_message: result.error_message,
+    //     signature: result.signature,
+    //   }
+    // }, processErrorResponse)
+
+    // const signature = 'null'
+    // return { signature }
   }
 
 }
